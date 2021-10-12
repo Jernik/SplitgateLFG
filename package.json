@@ -1,0 +1,22 @@
+{
+  "name": "splitgateutility",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc -p ./src",
+    "start": "node src/index.js",
+    "watch": "tsc -p tsconfig.json -w"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "discord.js": "^13.2.0",
+    "dotenv": "^10.0.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.0.0",
+    "eslint-config-prettier": "^8.3.0",
+    "prettier": "2.4.1"
+  }
+}
