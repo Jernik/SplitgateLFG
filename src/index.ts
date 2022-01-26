@@ -5,9 +5,9 @@ dotenv.config();
 
 import { MessageHandler } from "./handlers/messageHandler";
 import { BanHandler, UnbanHandler } from "./handlers/banHandlers";
-import { commands } from "./commands";
-import { registerSlashCommands } from "./commands/register";
-import { VoiceHandler } from "./handlers/VoiceHandler";
+import { commands, registerSlashCommands } from "./commands";
+import { VoiceManager } from "./handlers/VoiceHandler";
+import { buttonHandler } from "./handlers/buttonHandler";
 
 let token = process.env.DISCORD_TOKEN;
 
@@ -19,31 +19,33 @@ const client = new Client({
 		Intents.FLAGS.GUILD_BANS,
 	],
 });
-let _voiceHandler: VoiceHandler;
+let _voiceManager: VoiceManager;
 
 // When the client is ready, run this code (only once)
 client.once("ready", () => {
 	console.log("Ready!");
-	
-	_voiceHandler = new VoiceHandler(client);
+
+	_voiceManager = new VoiceManager(client);
 });
 
-
 client.on("interactionCreate", async (interaction) => {
-	if (!interaction.isCommand()) return;
+	if (interaction.isCommand()) {
+		const command = commands.find((c) => (c.name = interaction.commandName));
 
-	const command = commands.find(c=>c.name = interaction.commandName);
+		if (!command) return;
 
-	if (!command) return;
-
-	try {
-		await command.execute(interaction, _voiceHandler);
-	} catch (error) {
-		console.error(error);
-		return interaction.reply({
-			content: "There was an error while executing this command!",
-			ephemeral: true,
-		});
+		try {
+			await command.execute(interaction, _voiceManager);
+		} catch (error) {
+			console.error(error);
+			return interaction.reply({
+				content: "There was an error while executing this command!",
+				ephemeral: true,
+			});
+		}
+	}else if(interaction.isButton()){
+		//dispatch to button handler
+		buttonHandler(interaction, _voiceManager);
 	}
 });
 

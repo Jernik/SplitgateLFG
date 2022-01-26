@@ -10,7 +10,7 @@ import {
 	VoiceChannel,
 } from "discord.js";
 
-class VoiceHandler {
+class VoiceManager {
 	client: Client<boolean>;
 	channels: Array<ChannelEntry>;
 	listingChannel: TextChannel;
@@ -82,4 +82,4 @@ type ChannelEntry = {
 	//todo add blocked users
 };
 
-export { VoiceHandler };
+export { VoiceManager };
