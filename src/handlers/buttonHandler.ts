@@ -2,7 +2,7 @@ import { GuildMember, MessageComponentInteraction } from "discord.js";
 import { VoiceManager } from "./VoiceHandler";
 
 let buttonHandler = (interaction : MessageComponentInteraction, voiceManager:VoiceManager)=>{
-	interaction.reply("OW YOU HIT MY HEAD");
+	interaction.editReply("OW YOU HIT MY HEAD");
 	//todo find the member that clicked this
 	//todo add voicemanager method to move member into party
 	//get GuildMember object from interaction

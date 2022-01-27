@@ -8,9 +8,8 @@ let leave = {
 		.setName("leave")
 		.setDescription("leave your current party"),
 	async execute(interaction: CommandInteraction, voiceManager: VoiceManager) {
-		interaction.reply({
-			content: `you left your current party`,
-			ephemeral: true,
+		interaction.editReply({
+			content: `you left or disbanded your current party`
 		});
 		//get GuildMember object from interaction
 		if (interaction.member instanceof GuildMember) {

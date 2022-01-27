@@ -12,9 +12,8 @@ let casual = {
 		),
 	async execute(interaction: CommandInteraction, voiceManager: VoiceManager) {
 		const elo = interaction.options.get("elo");
-		interaction.reply({
-			content: `you created a casual party with elo ${elo.value}`,
-			ephemeral: true,
+		interaction.editReply({
+			content: `you created a casual party with elo ${elo.value}`
 		});
 		//get GuildMember object from interaction
 		if (interaction.member instanceof GuildMember) {

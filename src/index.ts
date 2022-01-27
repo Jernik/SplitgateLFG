@@ -12,6 +12,7 @@ import { buttonHandler } from "./handlers/buttonHandler";
 let token = process.env.DISCORD_TOKEN;
 let config = JSON.parse(process.env.VC_CONFIG);
 
+
 // Create a new client instance
 const client = new Client({
 	intents: [
@@ -36,37 +37,43 @@ client.once("ready", () => {
 
 client.on("interactionCreate", async (interaction) => {
 	if (interaction.isCommand()) {
-		const command = commands.find((c) => (c.name = interaction.commandName));
+		// give us 15 minutes to respond
+		interaction.deferReply({ ephemeral: true }).then(async () => {
+			const command = commands.find((c) => (c.name == interaction.commandName));
 
-		if (!command) return;
+			if (!command) return;
 
-		try {
-			await command.execute(interaction, _voiceManager);
-		} catch (error) {
-			console.error(error);
-			return interaction.reply({
-				content: "There was an error while executing this command!",
-				ephemeral: true,
-			});
-		}
+			try {
+				await command.execute(interaction, _voiceManager);
+			} catch (error) {
+				console.error(error);
+				return interaction.editReply({
+					content: "There was an error while executing this command!"
+				});
+			}
+		});
 	} else if (interaction.isButton()) {
 		//dispatch to button handler
-		buttonHandler(interaction, _voiceManager);
+		interaction
+			.deferReply({ ephemeral: true })
+			.then(() => buttonHandler(interaction, _voiceManager));
 	}
 });
 
-client.on("voiceStateUpdate",async (oldState:VoiceState, newState:VoiceState) => {
-	let newUserChannel = newState.channel;
-	let oldUserChannel = oldState.channel;
+client.on(
+	"voiceStateUpdate",
+	async (oldState: VoiceState, newState: VoiceState) => {
+		let newUserChannel = newState.channel;
+		let oldUserChannel = oldState.channel;
 
-	if (
-		oldUserChannel === undefined &&
-		newUserChannel.id === process.env.VOICE_START_CHANNEL_ID
-	) {
-		// User Joins the start channel, go check (in the voice manager) if they're in a party already
-		_voiceManager.userJoinedStartChannel(newState.member);
+		if (
+			newUserChannel?.id === process.env.VOICE_START_CHANNEL_ID
+		) {
+			// User Joins the start channel, go check (in the voice manager) if they're in a party already
+			_voiceManager.userJoinedStartChannel(newState.member);
+		}
 	}
-})
+);
 
 registerSlashCommands(token);
 console.log("Registered commands");

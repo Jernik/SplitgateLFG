@@ -14,7 +14,7 @@ import {
 const TIMEOUT_IN_MINUTES = 5;
 class VoiceManager {
 	client: Client<boolean>;
-	channels: Array<ChannelEntry>;
+	parties: Array<ChannelEntry>;
 	listingChannel: TextChannel;
 	constructor(client: Client) {
 		this.client = client;
@@ -24,7 +24,7 @@ class VoiceManager {
 			config.casual.listing_channel_id
 		) as TextChannel;
 
-		this.channels = [];
+		this.parties = [];
 		console.log(process.env.server_id);
 		let guild = this.client.guilds.resolve(process.env.server_id);
 		let category = guild.channels.resolve(
@@ -34,7 +34,7 @@ class VoiceManager {
 			let narrowedCategory = category as CategoryChannel;
 			narrowedCategory.children.forEach((c) => {
 				if (c instanceof VoiceChannel) {
-					this.channels.push({
+					this.parties.push({
 						channel: c,
 						leader: null,
 						time: null,
@@ -48,7 +48,7 @@ class VoiceManager {
 	createParty(leader: GuildMember) {
 		//todo check if leader is already a party leader, handle that case
 		// locate available voice channel
-		let channel = this.channels.find((c) => c.leader == null);
+		let channel = this.parties.find((c) => c.leader == null);
 		//todo handle if no channel is available
 		// update channel map with leader and time
 		channel.leader = leader;
@@ -79,7 +79,7 @@ class VoiceManager {
 	joinParty(member: GuildMember, partyId: Snowflake) {
 		//todo check if member is already in a party, handle that case
 		// locate party by id
-		let channel = this.channels.find((c) => c.channel.id == partyId);
+		let channel = this.parties.find((c) => c.channel.id == partyId);
 		//todo handle if no party is found
 		// move member to channel
 		member.voice.setChannel(channel.channel.id as Snowflake);
@@ -91,35 +91,87 @@ class VoiceManager {
 		member.send(`You have joined a party!`);
 	}
 
-	//TODO: make this work
+	//TODO should this be async? It could be pretty long running operation
 	expireParties() {
+		let now = new Date();
+		let refreshed = new Date();
+		refreshed.setMinutes(refreshed.getMinutes() + TIMEOUT_IN_MINUTES);
 		// loop through all channels
-		// if timeout has passed and leader is there, refresh timeout
-		// if timeout has passed and leader is not there, disband party by removing all members,
-		// removing leader, and calling discord to disconnect all members from VC
-		// loop through all members in channel, if timeout has passed, remove member from channel (if they are not in voice)
-		// if timeout has passed and member is in voice, refresh timeout
-		// should this be async? It could be pretty long running operation
+		this.parties
+			.filter((p) => p.leader != null)
+			.forEach((channel) => {
+				if (now > channel.time) {
+					//get voice status of leader
+					if (channel.leader?.voice?.channel.id !== channel.channel.id) {
+						this.clearParty(channel.channel.id);
+					} else {
+						channel.time = refreshed;
+					}
+				}
+				channel.members.forEach((member) => {
+					if (now > member[1]) {
+						if (member[0].voice.channel.id !== channel.channel.id) {
+							this.removeFromParty(member[0]);
+						}
+					} else {
+						member[1] = refreshed;
+					}
+				});
+			});
 	}
 
 	userJoinedStartChannel(member: GuildMember) {
 		// check to see if this user is already a member of a party, if so, move them into it
+		let party = this.parties.find((p) =>
+			p.members?.find((m) => m[0].id == member.id)
+		);
+		if (party) {
+			member.voice.setChannel(party.channel.id as Snowflake);
+			member.send(`You have rejoined a party!`);
+		}
 		// if not, do nothing
 	}
 
 	clearParty(partyId: Snowflake) {
 		// locate party by id
-		// remove all members from channel
-		// remove leader from channel
+		let party = this.parties.find((c) => c.channel.id == partyId);
 		// call discord to disconnect all members from VC
+		party.members.forEach((m) => m[0].voice.disconnect());
+		party.members.forEach((m) => m[0].send(`Your party has been disbanded.`));
+		// remove all members from channel
+		party.members = null;
+		// remove leader from channel
+		party.leader = null;
+		party.time = null;
 	}
 
-	removeFromParty(user: GuildMember) {
+	// todo consider adding a "reason" to this function
+	removeFromParty(member: GuildMember) {
 		// locate party by user
+		let party = this.parties
+			.filter((p) => p.members != null)
+			.find((c) => c.members.some((m) => m[0].id === member.id));
 		// if this user is the leader, disband party, otherwise:
-		// remove user from channel
-		// remove user from party
-		// DM user that they have been removed from party
+		if (party.leader.id === member.id) {
+			this.clearParty(party.channel.id);
+		} else {
+			// remove user from channel
+			member.voice.disconnect();
+			// remove user from party
+			party.members = party.members.filter((m) => m[0].id !== member.id);
+			// DM user that they have been removed from party
+			member.send(`You have been removed from the party.`);
+		}
+	}
+
+	isPartyLeader(member: GuildMember) {
+		let party = this.parties.find((p) => p.leader?.id === member.id);
+		return !!party;
+	}
+
+	isInPartyOf(guildMember: GuildMember, leader: GuildMember) {
+		let party = this.parties.find((p) => p.leader.id === leader.id);
+		return party?.members?.some((m) => m[0].id === guildMember.id);
 	}
 }
 
@@ -128,6 +180,7 @@ type ChannelEntry = {
 	channel: VoiceChannel;
 	leader: GuildMember | null;
 	time: Date | null;
+	//todo change this to be an actual type of GuildMemberWithTimeout.
 	members: Array<[GuildMember, Date]> | null;
 	//todo add blocked users
 };

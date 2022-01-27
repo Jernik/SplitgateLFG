@@ -9,4 +9,11 @@ let MessageHandler = (client: Client, voiceManager:VoiceManager) => (message: Me
 	// dispatch command to command handler (to be defined)
 };
 
+//commands:
+// clear party
+// clear party member
+// clearall parties (reset bot state without restarting bot)
+	// send message to all users, post in listing channel, and remove all members from VC
+
+
 export { MessageHandler };
