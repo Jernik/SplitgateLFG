@@ -81,7 +81,7 @@ console.log("Registered commands");
 // Login to Discord with your client's token
 client.login(token);
 
-client.on("messageCreate", MessageHandler(client, _voiceManager));
+client.on("messageCreate", async (message)=> {MessageHandler(client, _voiceManager)(message)});
 
 client.on("guildBanAdd", BanHandler(client));
 

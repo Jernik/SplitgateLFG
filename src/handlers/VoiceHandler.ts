@@ -11,7 +11,7 @@ import {
 	VoiceChannel,
 } from "discord.js";
 
-const TIMEOUT_IN_MINUTES = 5;
+const TIMEOUT_IN_MINUTES = 1;
 class VoiceManager {
 	client: Client<boolean>;
 	parties: Array<ChannelEntry>;
@@ -45,6 +45,12 @@ class VoiceManager {
 		}
 	}
 
+	resetAll() {
+		this.parties.forEach((p) => {
+			this.clearParty(p.channel.id);
+		});
+	}
+
 	createParty(leader: GuildMember) {
 		//todo check if leader is already a party leader, handle that case
 		// locate available voice channel
@@ -57,12 +63,16 @@ class VoiceManager {
 		channel.time = timeout;
 		channel.members = [[leader, timeout]];
 		// move leader to channel
-		//todo check to make sure leader is in a voice channel
-		leader.voice.setChannel(channel.channel.id as Snowflake);
-		// send message to leader
-		leader.send(
-			`You have created a party! Find it here: <#${channel.channel.id}>`
-		);
+		if (leader.voice) {
+			leader.voice.setChannel(channel.channel.id as Snowflake); // send message to leader
+			leader.send(
+				`You have created a party! I've automatically moved you to your voice channel, but if you get disconnected, you can rejoin by joining <#${process.env.VOICE_START_CHANNEL_ID}>`
+			);
+		}else{
+			leader.send(
+				`You have created a party! I tried to automatically move you, but you aren't in the voice channel <#${process.env.VOICE_START_CHANNEL_ID}>! If you join that channel in the next ${TIMEOUT_IN_MINUTES} minutes, I'll move you to your voice channel.`
+			);
+		}
 		//make post in listing channel
 		const row = new MessageActionRow().addComponents(
 			new MessageButton()
@@ -71,6 +81,7 @@ class VoiceManager {
 				.setLabel("Join now!")
 				.setStyle("PRIMARY")
 		);
+		//todo make this an embed
 		this.listingChannel.send({
 			content: `<@${leader.id}> created a party!`,
 			components: [row],
@@ -102,15 +113,15 @@ class VoiceManager {
 			.forEach((channel) => {
 				if (now > channel.time) {
 					//get voice status of leader
-					if (channel.leader?.voice?.channel.id !== channel.channel.id) {
+					if (channel.leader?.voice?.channel?.id !== channel.channel.id) {
 						this.clearParty(channel.channel.id);
 					} else {
 						channel.time = refreshed;
 					}
 				}
-				channel.members.forEach((member) => {
+				channel?.members?.forEach((member) => {
 					if (now > member[1]) {
-						if (member[0].voice.channel.id !== channel.channel.id) {
+						if (member[0].voice?.channel?.id !== channel.channel.id) {
 							this.removeFromParty(member[0]);
 						}
 					} else {
@@ -136,8 +147,8 @@ class VoiceManager {
 		// locate party by id
 		let party = this.parties.find((c) => c.channel.id == partyId);
 		// call discord to disconnect all members from VC
-		party.members.forEach((m) => m[0].voice.disconnect());
-		party.members.forEach((m) => m[0].send(`Your party has been disbanded.`));
+		party?.members?.forEach((m) => m[0].voice.disconnect());
+		party?.members?.forEach((m) => m[0].send(`Your party has been disbanded.`));
 		// remove all members from channel
 		party.members = null;
 		// remove leader from channel
