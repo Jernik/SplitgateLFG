@@ -7,12 +7,13 @@ let buttonHandler = (interaction : MessageComponentInteraction, voiceManager:Voi
 	//todo add voicemanager method to move member into party
 	//get GuildMember object from interaction
 	if (interaction.member instanceof GuildMember) {
-	    voiceManager.joinParty(interaction.member, interaction.customId);
+		voiceManager.joinParty(interaction.member, interaction.customId);
 	} else {
 		//todo figure out how to get the member object from the APIGuildMember object ig
 	}
-	//todo (in manager) find the channel that the button corresponds to, move memeber into party
+
 	//update party listing with "# members/total members"
+    //interaction.update("a member joined this party");
 	// if # members=total members, delete the button
 }
 

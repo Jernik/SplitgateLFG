@@ -7,9 +7,11 @@ import {
 	MessageButton,
 	Snowflake,
 	TextChannel,
+	User,
 	VoiceChannel,
 } from "discord.js";
 
+const TIMEOUT_IN_MINUTES = 5;
 class VoiceManager {
 	client: Client<boolean>;
 	channels: Array<ChannelEntry>;
@@ -23,7 +25,7 @@ class VoiceManager {
 		) as TextChannel;
 
 		this.channels = [];
-        console.log(process.env.server_id);
+		console.log(process.env.server_id);
 		let guild = this.client.guilds.resolve(process.env.server_id);
 		let category = guild.channels.resolve(
 			config.casual.category_id as Snowflake
@@ -50,10 +52,12 @@ class VoiceManager {
 		//todo handle if no channel is available
 		// update channel map with leader and time
 		channel.leader = leader;
-		channel.time = new Date();
-		channel.members = [[leader, new Date()]];
+		let timeout = new Date();
+		timeout.setMinutes(timeout.getMinutes() + TIMEOUT_IN_MINUTES);
+		channel.time = timeout;
+		channel.members = [[leader, timeout]];
 		// move leader to channel
-        //todo check to make sure leader is in a voice channel
+		//todo check to make sure leader is in a voice channel
 		leader.voice.setChannel(channel.channel.id as Snowflake);
 		// send message to leader
 		leader.send(
@@ -72,7 +76,7 @@ class VoiceManager {
 			components: [row],
 		});
 	}
-	joinParty(member: GuildMember, partyId:Snowflake) {
+	joinParty(member: GuildMember, partyId: Snowflake) {
 		//todo check if member is already in a party, handle that case
 		// locate party by id
 		let channel = this.channels.find((c) => c.channel.id == partyId);
@@ -80,9 +84,42 @@ class VoiceManager {
 		// move member to channel
 		member.voice.setChannel(channel.channel.id as Snowflake);
 		// update channel map with member
-		channel.members.push([member, new Date()]);
+		let timeout = new Date();
+		timeout.setMinutes(timeout.getMinutes() + TIMEOUT_IN_MINUTES);
+		channel.members.push([member, timeout]);
 		// send message to member
 		member.send(`You have joined a party!`);
+	}
+
+	//TODO: make this work
+	expireParties() {
+		// loop through all channels
+		// if timeout has passed and leader is there, refresh timeout
+		// if timeout has passed and leader is not there, disband party by removing all members,
+		// removing leader, and calling discord to disconnect all members from VC
+		// loop through all members in channel, if timeout has passed, remove member from channel (if they are not in voice)
+		// if timeout has passed and member is in voice, refresh timeout
+		// should this be async? It could be pretty long running operation
+	}
+
+	userJoinedStartChannel(member: GuildMember) {
+		// check to see if this user is already a member of a party, if so, move them into it
+		// if not, do nothing
+	}
+
+	clearParty(partyId: Snowflake) {
+		// locate party by id
+		// remove all members from channel
+		// remove leader from channel
+		// call discord to disconnect all members from VC
+	}
+
+	removeFromParty(user: GuildMember) {
+		// locate party by user
+		// if this user is the leader, disband party, otherwise:
+		// remove user from channel
+		// remove user from party
+		// DM user that they have been removed from party
 	}
 }
 
