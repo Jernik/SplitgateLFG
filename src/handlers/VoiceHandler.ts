@@ -3,8 +3,10 @@ import {
 	Channel,
 	Client,
 	GuildMember,
+	Message,
 	MessageActionRow,
 	MessageButton,
+	MessageEmbed,
 	Snowflake,
 	TextChannel,
 	User,
@@ -14,21 +16,22 @@ import {
 const TIMEOUT_IN_MINUTES = 1;
 class VoiceManager {
 	client: Client<boolean>;
-	parties: Array<ChannelEntry>;
+	parties: Array<Party>;
 	listingChannel: TextChannel;
+	config: any;
 	constructor(client: Client) {
 		this.client = client;
-		let config = JSON.parse(process.env.VC_CONFIG);
+		this.config = JSON.parse(process.env.VC_CONFIG);
 
 		this.listingChannel = this.client.channels.resolve(
-			config.casual.listing_channel_id
+			this.config.casual.listing_channel_id
 		) as TextChannel;
 
 		this.parties = [];
 		console.log(process.env.server_id);
 		let guild = this.client.guilds.resolve(process.env.server_id);
 		let category = guild.channels.resolve(
-			config.casual.category_id as Snowflake
+			this.config.casual.category_id as Snowflake
 		);
 		if (category.type === "GUILD_CATEGORY") {
 			let narrowedCategory = category as CategoryChannel;
@@ -39,6 +42,8 @@ class VoiceManager {
 						leader: null,
 						time: null,
 						members: null,
+						listingMessage: null,
+						partyDetails: null,
 					});
 				}
 			});
@@ -51,55 +56,129 @@ class VoiceManager {
 		});
 	}
 
-	createParty(leader: GuildMember) {
+	async createParty(
+		leader: GuildMember,
+		partyType: PartyType,
+		partyDescription: string
+	) {
+		let maxPartySize = this.config[partyType].max_party_size;
 		//todo check if leader is already a party leader, handle that case
 		// locate available voice channel
-		let channel = this.parties.find((c) => c.leader == null);
+		let party = this.parties.find((c) => c.leader == null);
 		//todo handle if no channel is available
 		// update channel map with leader and time
-		channel.leader = leader;
+		party.leader = leader;
 		let timeout = new Date();
 		timeout.setMinutes(timeout.getMinutes() + TIMEOUT_IN_MINUTES);
-		channel.time = timeout;
-		channel.members = [[leader, timeout]];
+		party.time = timeout;
+		party.members = [[leader, timeout]];
 		// move leader to channel
-		if (leader.voice) {
-			leader.voice.setChannel(channel.channel.id as Snowflake); // send message to leader
-			leader.send(
-				`You have created a party! I've automatically moved you to your voice channel, but if you get disconnected, you can rejoin by joining <#${process.env.VOICE_START_CHANNEL_ID}>`
-			);
-		}else{
-			leader.send(
-				`You have created a party! I tried to automatically move you, but you aren't in the voice channel <#${process.env.VOICE_START_CHANNEL_ID}>! If you join that channel in the next ${TIMEOUT_IN_MINUTES} minutes, I'll move you to your voice channel.`
-			);
+		if (leader.voice?.channelId) {
+			leader.voice.setChannel(party.channel.id as Snowflake); // send message to leader
+		} else {
+			return false;
 		}
+		party.partyDetails = {
+			partyType,
+			description: partyDescription,
+		};
 		//make post in listing channel
-		const row = new MessageActionRow().addComponents(
-			new MessageButton()
-				//stuff the channel id in the button so we know which channel to join when the button is clicked
-				.setCustomId(channel.channel.id)
-				.setLabel("Join now!")
-				.setStyle("PRIMARY")
-		);
-		//todo make this an embed
-		this.listingChannel.send({
-			content: `<@${leader.id}> created a party!`,
+		const row = this.buildButtons(party);
+		const embed = this.buildEmbed(leader, partyType, partyDescription, 1);
+
+		party.listingMessage = await this.listingChannel.send({
+			embeds: [embed],
 			components: [row],
 		});
+		
+		return true;
 	}
+
+	private buildButtons(party:Party) {
+		let button:MessageButton;
+		if(party.members.length < this.config[party.partyDetails.partyType].max_party_size) {
+			button = new MessageButton()
+				//stuff the channel id in the button so we know which channel to join when the button is clicked
+				.setCustomId(`join_${party.channel.id}`)
+				.setLabel("Join now!")
+				.setStyle("PRIMARY");
+		}else{
+			button = new MessageButton()
+				//stuff the channel id in the button so we know which channel to join when the button is clicked
+				.setCustomId(`join_${party.channel.id}`)
+				.setLabel("Party is Full")
+				.setStyle("PRIMARY")
+				.setDisabled(true);
+		}
+		return new MessageActionRow().addComponents(
+			button
+		);
+	}
+
+	private buildEmbed(
+		leader: GuildMember,
+		partyType: PartyType,
+		partyDescription: string,
+		currentPartySize: number
+	) {
+		return new MessageEmbed()
+			.setColor("#0099ff")
+			.setTitle(`${leader.displayName}'s party`)
+			.setAuthor(
+				"Jernik",
+				leader.displayAvatarURL({ format: "png", dynamic: true })
+			)
+			.setDescription(partyDescription ?? "")
+			.addFields(
+				{ name: "Leader", value: `<@${leader.id}>`, inline: false },
+				{ name: "Party Type", value: partyType, inline: false },
+				{
+					name: "Party Size",
+					value: `${currentPartySize}/${this.config[partyType].max_party_size}`,
+					inline: false,
+				}
+			)
+			.setThumbnail(leader.displayAvatarURL({ format: "png", dynamic: true }))
+			.setTimestamp();
+	}
+
 	joinParty(member: GuildMember, partyId: Snowflake) {
-		//todo check if member is already in a party, handle that case
 		// locate party by id
-		let channel = this.parties.find((c) => c.channel.id == partyId);
-		//todo handle if no party is found
+		let party = this.parties.find((c) => c.channel.id == partyId);
+		//ensure the party is real
+		if (!party || !party.leader) {
+			return false;
+		}
 		// move member to channel
-		member.voice.setChannel(channel.channel.id as Snowflake);
-		// update channel map with member
-		let timeout = new Date();
-		timeout.setMinutes(timeout.getMinutes() + TIMEOUT_IN_MINUTES);
-		channel.members.push([member, timeout]);
-		// send message to member
-		member.send(`You have joined a party!`);
+		if (member.voice?.channelId) {
+			member.voice.setChannel(party.channel.id as Snowflake);
+			// update channel map with member
+			let timeout = new Date();
+			timeout.setMinutes(timeout.getMinutes() + TIMEOUT_IN_MINUTES);
+			party.members.push([member, timeout]);
+			// update listing message
+			this.updateListingMessage(party);
+			return true;
+		} else {
+			return;
+		}
+	}
+	updateListingMessage(party: Party) {
+		if (!party.leader) {
+			party.listingMessage.delete();
+			return;
+		}
+		party.listingMessage.edit({
+			components: [this.buildButtons(party)],
+			embeds: [
+				this.buildEmbed(
+					party.leader,
+					party.partyDetails.partyType,
+					party.partyDetails.description,
+					party.members.length
+				),
+			],
+		});
 	}
 
 	//TODO should this be async? It could be pretty long running operation
@@ -154,6 +233,9 @@ class VoiceManager {
 		// remove leader from channel
 		party.leader = null;
 		party.time = null;
+		this.updateListingMessage(party);
+		party.listingMessage = null;
+		party.partyDetails = null;
 	}
 
 	// todo consider adding a "reason" to this function
@@ -169,9 +251,10 @@ class VoiceManager {
 			// remove user from channel
 			member.voice.disconnect();
 			// remove user from party
-			party.members = party.members.filter((m) => m[0].id !== member.id);
+			party.members = party.members?.filter((m) => m[0].id !== member.id);
 			// DM user that they have been removed from party
 			member.send(`You have been removed from the party.`);
+			this.updateListingMessage(party);
 		}
 	}
 
@@ -181,19 +264,29 @@ class VoiceManager {
 	}
 
 	isInPartyOf(guildMember: GuildMember, leader: GuildMember) {
-		let party = this.parties.find((p) => p.leader.id === leader.id);
+		let party = this.parties.find((p) => p.leader?.id === leader.id);
 		return party?.members?.some((m) => m[0].id === guildMember.id);
+	}
+	getPartyId(member: GuildMember) {
+		let party = this.parties.find((p) =>
+			p.members?.some((m) => m[0].id === member.id)
+		);
+		return party?.channel?.id;
 	}
 }
 
 //todo split this into "empty channel" and "party"
-type ChannelEntry = {
+type Party = {
 	channel: VoiceChannel;
 	leader: GuildMember | null;
 	time: Date | null;
 	//todo change this to be an actual type of GuildMemberWithTimeout.
 	members: Array<[GuildMember, Date]> | null;
+	listingMessage: Message | null;
+	partyDetails: { partyType: PartyType; description: string } | null;
 	//todo add blocked users
 };
+
+export type PartyType = "casual" | "ranked" | "rankedtakedown" | "other";
 
 export { VoiceManager };
