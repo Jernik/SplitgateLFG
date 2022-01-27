@@ -51,6 +51,7 @@ class VoiceManager {
 		// update channel map with leader and time
 		channel.leader = leader;
 		channel.time = new Date();
+		channel.members = [[leader, new Date()]];
 		// move leader to channel
         //todo check to make sure leader is in a voice channel
 		leader.voice.setChannel(channel.channel.id as Snowflake);
@@ -70,6 +71,18 @@ class VoiceManager {
 			content: `<@${leader.id}> created a party!`,
 			components: [row],
 		});
+	}
+	joinParty(member: GuildMember, partyId:Snowflake) {
+		//todo check if member is already in a party, handle that case
+		// locate party by id
+		let channel = this.channels.find((c) => c.channel.id == partyId);
+		//todo handle if no party is found
+		// move member to channel
+		member.voice.setChannel(channel.channel.id as Snowflake);
+		// update channel map with member
+		channel.members.push([member, new Date()]);
+		// send message to member
+		member.send(`You have joined a party!`);
 	}
 }
 
