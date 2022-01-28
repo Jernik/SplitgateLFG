@@ -31,7 +31,8 @@ client.once("ready", () => {
 	//create interval to call into voice manager to check for expired parties/party members
 	setInterval(() => {
 		try{
-		_voiceManager.expireParties();
+			console.log("Checking for timeouts");
+			_voiceManager.expireParties();
 		}catch(e){
 			console.log(e);
 		}
@@ -57,9 +58,9 @@ client.on("interactionCreate", async (interaction) => {
 		});
 	} else if (interaction.isButton()) {
 		//dispatch to button handler
-		interaction.deferReply({ ephemeral: true }).then(() => {
+		interaction.deferReply({ ephemeral: true }).then(async () => {
 			try {
-				buttonHandler(interaction, _voiceManager);
+				await buttonHandler(interaction, _voiceManager);
 			} catch(e) {
 				console.log(e);
 				return interaction.editReply({
@@ -90,7 +91,7 @@ console.log("Registered commands");
 client.login(token);
 
 client.on("messageCreate", async (message) => {
-	MessageHandler(client, _voiceManager)(message);
+	await MessageHandler(client, _voiceManager)(message);
 });
 
 client.on("guildBanAdd", BanHandler(client));

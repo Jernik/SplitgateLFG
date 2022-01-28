@@ -1,11 +1,11 @@
 
 import { Routes } from "discord-api-types/v9";
 import { REST } from "@discordjs/rest";
-import { casual } from "./casual";
+import { create } from "./casual";
 import { kick } from "./kick";
 import { leave } from "./leave";
 
-const commands = [casual, kick, leave];
+const commands = [create, kick, leave];
 
 let registerSlashCommands = (token: string) => {
 	// Place your client and guild ids here

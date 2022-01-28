@@ -6,20 +6,20 @@ import {
 } from "discord.js";
 import { VoiceManager } from "./VoiceHandler";
 
-let buttonHandler = (
+let buttonHandler = async (
 	interaction: MessageComponentInteraction,
 	voiceManager: VoiceManager
 ) => {
 	//determine button type
 	let buttonType = interaction.customId.split("_")[0];
 	if (buttonType === "join") {
-		handleJoinButton(interaction, voiceManager);
+		await handleJoinButton(interaction, voiceManager);
 	} else if (buttonType === "transferResponse") {
-		handleTransferResponse(interaction, voiceManager);
+		await handleTransferResponse(interaction, voiceManager);
 	}
 };
 
-function handleJoinButton(
+async function handleJoinButton(
 	interaction: MessageComponentInteraction,
 	voiceManager: VoiceManager
 ) {
@@ -58,7 +58,7 @@ function handleJoinButton(
 		}
 		if (interaction.member.voice) {
 			let requestedPartyId = interaction.customId.split("_")[1];
-			moveMember(interaction, voiceManager, requestedPartyId);
+			await moveMember(interaction, voiceManager, requestedPartyId);
 		}
 	} else {
 		//todo figure out how to get the member object from the APIGuildMember object and invert this if
@@ -70,7 +70,7 @@ function handleJoinButton(
 
 export { buttonHandler };
 
-function handleTransferResponse(
+    async function handleTransferResponse(
 	interaction: MessageComponentInteraction,
 	voiceManager: VoiceManager
 ) {
@@ -80,20 +80,20 @@ function handleTransferResponse(
 	}
 	if (interaction.member instanceof GuildMember) {
 		if (interaction.member.voice) {
-			let requestedPartyId = interaction.customId.split("_")[1];
-			moveMember(interaction, voiceManager, requestedPartyId);
+			let requestedPartyId = interaction.customId.split("_")[2];
+			await moveMember(interaction, voiceManager, requestedPartyId);
 		}
 	}
 }
 
-function moveMember(
+async function moveMember(
 	interaction: MessageComponentInteraction,
 	voiceManager: VoiceManager,
 	partyId: string
 ) {
 	if (interaction.member instanceof GuildMember) {
 		if (interaction.member.voice?.channelId) {
-			let success = voiceManager.joinParty(interaction.member, partyId);
+			let success = await voiceManager.joinParty(interaction.member, partyId);
 			if (success) {
 				interaction.editReply(
 					`You have joined this party! I've automatically moved you to the VC, but if you get disconnected, join <#${process.env.VOICE_START_CHANNEL_ID}> to be reconnected.`

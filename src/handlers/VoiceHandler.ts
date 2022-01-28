@@ -28,7 +28,6 @@ class VoiceManager {
 		) as TextChannel;
 
 		this.parties = [];
-		console.log(process.env.server_id);
 		let guild = this.client.guilds.resolve(process.env.server_id);
 		let category = guild.channels.resolve(
 			this.config.casual.category_id as Snowflake
@@ -58,14 +57,17 @@ class VoiceManager {
 
 	async createParty(
 		leader: GuildMember,
-		partyType: PartyType,
-		partyDescription: string
+		partyType: string,
+		partyDescription: string,
+		maxPartySize: number
 	) {
-		let maxPartySize = this.config[partyType].max_party_size;
 		//todo check if leader is already a party leader, handle that case
 		// locate available voice channel
 		let party = this.parties.find((c) => c.leader == null);
 		//todo handle if no channel is available
+		if(!party){
+			return "No available channels (Error 1000)";
+		}
 		// update channel map with leader and time
 		party.leader = leader;
 		let timeout = new Date();
@@ -76,33 +78,40 @@ class VoiceManager {
 		if (leader.voice?.channelId) {
 			leader.voice.setChannel(party.channel.id as Snowflake); // send message to leader
 		} else {
-			return false;
+			return "Unknown Error (Error 1001)";
 		}
 		party.partyDetails = {
 			partyType,
 			description: partyDescription,
+			maxPartySize: maxPartySize,
 		};
 		//make post in listing channel
 		const row = this.buildButtons(party);
-		const embed = this.buildEmbed(leader, partyType, partyDescription, 1);
+		const embed = this.buildEmbed(
+			leader,
+			partyType,
+			partyDescription,
+			1,
+			maxPartySize
+		);
 
 		party.listingMessage = await this.listingChannel.send({
 			embeds: [embed],
 			components: [row],
 		});
-		
-		return true;
+
+		return null;
 	}
 
-	private buildButtons(party:Party) {
-		let button:MessageButton;
-		if(party.members.length < this.config[party.partyDetails.partyType].max_party_size) {
+	private buildButtons(party: Party) {
+		let button: MessageButton;
+		if (party.members.length < party.partyDetails.maxPartySize) {
 			button = new MessageButton()
 				//stuff the channel id in the button so we know which channel to join when the button is clicked
 				.setCustomId(`join_${party.channel.id}`)
 				.setLabel("Join now!")
 				.setStyle("PRIMARY");
-		}else{
+		} else {
 			button = new MessageButton()
 				//stuff the channel id in the button so we know which channel to join when the button is clicked
 				.setCustomId(`join_${party.channel.id}`)
@@ -110,22 +119,21 @@ class VoiceManager {
 				.setStyle("PRIMARY")
 				.setDisabled(true);
 		}
-		return new MessageActionRow().addComponents(
-			button
-		);
+		return new MessageActionRow().addComponents(button);
 	}
 
 	private buildEmbed(
 		leader: GuildMember,
-		partyType: PartyType,
+		partyType: string,
 		partyDescription: string,
-		currentPartySize: number
+		currentPartySize: number,
+		maxPartySize: number
 	) {
 		return new MessageEmbed()
 			.setColor("#0099ff")
 			.setTitle(`${leader.displayName}'s party`)
 			.setAuthor(
-				"Jernik",
+				`${leader.displayName}`,
 				leader.displayAvatarURL({ format: "png", dynamic: true })
 			)
 			.setDescription(partyDescription ?? "")
@@ -134,7 +142,7 @@ class VoiceManager {
 				{ name: "Party Type", value: partyType, inline: false },
 				{
 					name: "Party Size",
-					value: `${currentPartySize}/${this.config[partyType].max_party_size}`,
+					value: `${currentPartySize}/${maxPartySize}`,
 					inline: false,
 				}
 			)
@@ -142,16 +150,27 @@ class VoiceManager {
 			.setTimestamp();
 	}
 
-	joinParty(member: GuildMember, partyId: Snowflake) {
+	async joinParty(member: GuildMember, partyId: Snowflake) {
+		//make sure the member is fresh
+		//todo make sure this isn't really slow
+		await member.fetch();
 		// locate party by id
 		let party = this.parties.find((c) => c.channel.id == partyId);
+		//check if member is already in party
+		let oldParty = this.parties
+			.filter((p) => p.members)
+			.find((c) => c.members.some((m) => m[0].id == member.id));
+		if (oldParty) {
+			//remove them from old party
+			oldParty.members = oldParty.members.filter((m) => m[0].id != member.id);
+		}
 		//ensure the party is real
 		if (!party || !party.leader) {
 			return false;
 		}
 		// move member to channel
 		if (member.voice?.channelId) {
-			member.voice.setChannel(party.channel.id as Snowflake);
+			this.safelyMoveMember(member, party.channel.id);
 			// update channel map with member
 			let timeout = new Date();
 			timeout.setMinutes(timeout.getMinutes() + TIMEOUT_IN_MINUTES);
@@ -165,7 +184,7 @@ class VoiceManager {
 	}
 	updateListingMessage(party: Party) {
 		if (!party.leader) {
-			party.listingMessage.delete();
+			party?.listingMessage?.delete();
 			return;
 		}
 		party.listingMessage.edit({
@@ -175,7 +194,8 @@ class VoiceManager {
 					party.leader,
 					party.partyDetails.partyType,
 					party.partyDetails.description,
-					party.members.length
+					party.members.length,
+					party.partyDetails.maxPartySize
 				),
 			],
 		});
@@ -198,10 +218,10 @@ class VoiceManager {
 						channel.time = refreshed;
 					}
 				}
-				channel?.members?.forEach((member) => {
+				channel?.members?.forEach(async (member) => {
 					if (now > member[1]) {
 						if (member[0].voice?.channel?.id !== channel.channel.id) {
-							this.removeFromParty(member[0]);
+							await this.removeFromParty(member[0]);
 						}
 					} else {
 						member[1] = refreshed;
@@ -216,7 +236,7 @@ class VoiceManager {
 			p.members?.find((m) => m[0].id == member.id)
 		);
 		if (party) {
-			member.voice.setChannel(party.channel.id as Snowflake);
+			this.safelyMoveMember(member, party.channel.id);
 			member.send(`You have rejoined a party!`);
 		}
 		// if not, do nothing
@@ -225,31 +245,38 @@ class VoiceManager {
 	clearParty(partyId: Snowflake) {
 		// locate party by id
 		let party = this.parties.find((c) => c.channel.id == partyId);
+		party.leader = null;
+		this.updateListingMessage(party);
 		// call discord to disconnect all members from VC
-		party?.members?.forEach((m) => m[0].voice.disconnect());
+		party?.members?.forEach(async (m) => {
+			this.safelyMoveMember(m[0], process.env.VOICE_START_CHANNEL_ID);
+		});
 		party?.members?.forEach((m) => m[0].send(`Your party has been disbanded.`));
+		//also check discord to clear out any dangling members
+		party.channel.members.forEach(async (m) => {
+			this.safelyMoveMember(m, process.env.VOICE_START_CHANNEL_ID);
+		});
 		// remove all members from channel
 		party.members = null;
 		// remove leader from channel
-		party.leader = null;
 		party.time = null;
-		this.updateListingMessage(party);
 		party.listingMessage = null;
 		party.partyDetails = null;
 	}
 
 	// todo consider adding a "reason" to this function
-	removeFromParty(member: GuildMember) {
+	async removeFromParty(member: GuildMember) {
 		// locate party by user
 		let party = this.parties
 			.filter((p) => p.members != null)
 			.find((c) => c.members.some((m) => m[0].id === member.id));
+		if (!party) return;
 		// if this user is the leader, disband party, otherwise:
-		if (party.leader.id === member.id) {
+		if (party.leader?.id === member.id) {
 			this.clearParty(party.channel.id);
 		} else {
 			// remove user from channel
-			member.voice.disconnect();
+			this.safelyMoveMember(member, process.env.VOICE_START_CHANNEL_ID);
 			// remove user from party
 			party.members = party.members?.filter((m) => m[0].id !== member.id);
 			// DM user that they have been removed from party
@@ -273,6 +300,15 @@ class VoiceManager {
 		);
 		return party?.channel?.id;
 	}
+	safelyMoveMember(member: GuildMember, channelId: string) {
+		if (member.voice?.channelId) {
+			try {
+				member.voice.setChannel(channelId as Snowflake);
+			} catch (e) {
+				console.log(e);
+			}
+		}
+	}
 }
 
 //todo split this into "empty channel" and "party"
@@ -283,7 +319,11 @@ type Party = {
 	//todo change this to be an actual type of GuildMemberWithTimeout.
 	members: Array<[GuildMember, Date]> | null;
 	listingMessage: Message | null;
-	partyDetails: { partyType: PartyType; description: string } | null;
+	partyDetails: {
+		partyType: string;
+		description: string;
+		maxPartySize: number;
+	} | null;
 	//todo add blocked users
 };
 

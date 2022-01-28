@@ -16,21 +16,21 @@ const prefix = "#";
 
 //commands:
 // clear party
-let clearParty = (args: string, voiceManager: VoiceManager) => {
+let clearParty = async (args: string, voiceManager: VoiceManager) => {
 	let partyId = args.split(" ")[0];
 	voiceManager.clearParty(partyId);
 	return `party ${partyId} cleared`;
 };
 // clear party member
 //todo move this into the kick slash command?
-let kick = (args: string, voiceManager: VoiceManager, client: Client) => {
+let kick = async (args: string, voiceManager: VoiceManager, client: Client) => {
 	let memberId = args.split(" ")[0];
 	let guildMember = client.guilds.cache.first().members.cache.get(memberId);
-	voiceManager.removeFromParty(guildMember);
+	await voiceManager.removeFromParty(guildMember);
 	return `you kicked ${guildMember.user.username} from their party`;
 };
 // clearall parties (reset bot state without restarting bot)
-let clearAll = (args: string, voiceManager: VoiceManager) => {
+let clearAll = async (args: string, voiceManager: VoiceManager) => {
 	voiceManager.resetAll();
 	return `you have cleared all parties`;
 };
@@ -38,7 +38,7 @@ let clearAll = (args: string, voiceManager: VoiceManager) => {
 
 let commandMap = new Map<
 	string,
-	(args: string, voiceManager: VoiceManager, client: Client) => string
+	(args: string, voiceManager: VoiceManager, client: Client) => Promise<string>
 >([
 	["clear", clearParty],
 	["kick", kick],
@@ -46,7 +46,7 @@ let commandMap = new Map<
 ]);
 
 let MessageHandler =
-	(client: Client, voiceManager: VoiceManager) => (message: Message) => {
+	(client: Client, voiceManager: VoiceManager) => async (message: Message) => {
 		// check if message is from a bot
 		if (message.author.bot) {
 			return;
@@ -63,7 +63,7 @@ let MessageHandler =
 			//lookup and execute command
 			let command = message.content.split(" ")[0].substring(prefix.length);
 			try {
-				let responseMessage = commandMap.get(command.toLowerCase())(
+				let responseMessage = await commandMap.get(command.toLowerCase())(
 					message.content.substring(prefix.length + command.length + 1),
 					voiceManager,
 					client
