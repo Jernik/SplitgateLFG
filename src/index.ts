@@ -4,13 +4,12 @@ import * as dotenv from "dotenv";
 dotenv.config();
 
 import { MessageHandler } from "./handlers/messageHandler";
-import { BanHandler, UnbanHandler } from "./handlers/banHandlers";
 import { commands, registerSlashCommands } from "./commands";
 import { VoiceManager } from "./handlers/VoiceHandler";
 import { buttonHandler } from "./handlers/buttonHandler";
+import {config} from "./config";
 
-let token = process.env.DISCORD_TOKEN;
-let config = JSON.parse(process.env.VC_CONFIG);
+let token = config.DISCORD_TOKEN;
 
 // Create a new client instance
 const client = new Client({
@@ -28,6 +27,8 @@ client.once("ready", () => {
 	console.log("Ready!");
 
 	_voiceManager = new VoiceManager(client);
+	//make sure there is noone in the voice channels
+	_voiceManager.resetAll();
 	//create interval to call into voice manager to check for expired parties/party members
 	setInterval(() => {
 		try{
@@ -77,7 +78,7 @@ client.on(
 		let newUserChannel = newState.channel;
 		let oldUserChannel = oldState.channel;
 
-		if (newUserChannel?.id === process.env.VOICE_START_CHANNEL_ID) {
+		if (newUserChannel?.id === config.VOICE_START_CHANNEL_ID) {
 			// User Joins the start channel, go check (in the voice manager) if they're in a party already
 			_voiceManager.userJoinedStartChannel(newState.member);
 		}
@@ -93,7 +94,3 @@ client.login(token);
 client.on("messageCreate", async (message) => {
 	await MessageHandler(client, _voiceManager)(message);
 });
-
-client.on("guildBanAdd", BanHandler(client));
-
-client.on("guildBanRemove", UnbanHandler(client));

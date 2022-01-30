@@ -4,6 +4,7 @@ import {
 	MessageButton,
 	MessageComponentInteraction,
 } from "discord.js";
+import { config } from "../config";
 import { VoiceManager } from "./VoiceHandler";
 
 let buttonHandler = async (
@@ -96,14 +97,14 @@ async function moveMember(
 			let success = await voiceManager.joinParty(interaction.member, partyId);
 			if (success) {
 				interaction.editReply(
-					`You have joined this party! I've automatically moved you to the VC, but if you get disconnected, join <#${process.env.VOICE_START_CHANNEL_ID}> to be reconnected.`
+					`You have joined this party! I've automatically moved you to the VC, but if you get disconnected, join <#${config.VOICE_START_CHANNEL_ID}> to be reconnected.`
 				);
 			} else {
 				interaction.editReply(`Unable to join party.`);
 			}
 		} else {
 			interaction.editReply({
-				content: `You must be in <#${process.env.VOICE_START_CHANNEL_ID}> to join a party`,
+				content: `You must be in <#${config.VOICE_START_CHANNEL_ID}> to join a party`,
 			});
 		}
 	} else {

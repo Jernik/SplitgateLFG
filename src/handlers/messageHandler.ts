@@ -26,7 +26,7 @@ let clearParty = async (args: string, voiceManager: VoiceManager) => {
 let kick = async (args: string, voiceManager: VoiceManager, client: Client) => {
 	let memberId = args.split(" ")[0];
 	let guildMember = client.guilds.cache.first().members.cache.get(memberId);
-	await voiceManager.removeFromParty(guildMember);
+	await voiceManager.removeFromParty(guildMember, `You have been kicked from your party`);
 	return `you kicked ${guildMember.user.username} from their party`;
 };
 // clearall parties (reset bot state without restarting bot)

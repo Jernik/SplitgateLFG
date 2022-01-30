@@ -4,14 +4,13 @@ import { REST } from "@discordjs/rest";
 import { create } from "./casual";
 import { kick } from "./kick";
 import { leave } from "./leave";
+import {config} from "../config";
 
 const commands = [create, kick, leave];
 
 let registerSlashCommands = (token: string) => {
-	// Place your client and guild ids here
-	//todo move these to config
-	const clientId = "935263984934871050";
-	const guildId = "361634430626037770";
+	const clientId = config.CLIENT_ID;
+	const guildId = config.SERVER_ID;
 
 	let commandsToRegister = commands.map((c) => c.data);
 

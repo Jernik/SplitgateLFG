@@ -12,41 +12,59 @@ import {
 	User,
 	VoiceChannel,
 } from "discord.js";
+import { config } from "../config";
 
 const TIMEOUT_IN_MINUTES = 1;
 class VoiceManager {
 	client: Client<boolean>;
 	parties: Array<Party>;
 	listingChannel: TextChannel;
-	config: any;
 	constructor(client: Client) {
 		this.client = client;
-		this.config = JSON.parse(process.env.VC_CONFIG);
 
 		this.listingChannel = this.client.channels.resolve(
-			this.config.casual.listing_channel_id
+			config.LISTING_CHANNEL_ID
 		) as TextChannel;
 
 		this.parties = [];
-		let guild = this.client.guilds.resolve(process.env.server_id);
-		let category = guild.channels.resolve(
-			this.config.casual.category_id as Snowflake
-		);
-		if (category.type === "GUILD_CATEGORY") {
-			let narrowedCategory = category as CategoryChannel;
-			narrowedCategory.children.forEach((c) => {
-				if (c instanceof VoiceChannel) {
-					this.parties.push({
-						channel: c,
-						leader: null,
-						time: null,
-						members: null,
-						listingMessage: null,
-						partyDetails: null,
-					});
-				}
+		let guild = this.client.guilds.resolve(config.SERVER_ID);
+		config.CATEGORY_IDS.forEach((categoryId) => {
+			let category = guild.channels.resolve(categoryId);
+			if (category.type === "GUILD_CATEGORY") {
+				let narrowedCategory = category as CategoryChannel;
+				narrowedCategory.children.forEach((c) => {
+					if (c instanceof VoiceChannel) {
+						this.parties.push({
+							channel: c,
+							leader: null,
+							time: null,
+							members: null,
+							listingMessage: null,
+							partyDetails: null,
+						});
+					}
+				});
+			}
+		});
+
+		// make sure all of these VCs are empty
+		this.parties.forEach((p) => {
+			//go through each one and move all members (if any) to the lobby
+			p.channel.members.forEach((m) => {
+				this.safelyMoveMember(m, config.VOICE_START_CHANNEL_ID);
+				this.safelySendDm(
+					m,
+					`The bot has been restarted and if you were in a party, it has been lost, sorry!`
+				);
 			});
-		}
+		});
+		//make sure the listing channel is empty
+		this.listingChannel.messages.fetch().then((messages) => {
+			messages.forEach((m) => {
+				//delete all messages by the bot
+				if (m.author.id === this.client.user.id) m.delete();
+			});
+		});
 	}
 
 	resetAll() {
@@ -64,8 +82,9 @@ class VoiceManager {
 		//todo check if leader is already a party leader, handle that case
 		// locate available voice channel
 		let party = this.parties.find((c) => c.leader == null);
-		//todo handle if no channel is available
-		if(!party){
+
+		//handle if no channel is available
+		if (!party) {
 			return "No available channels (Error 1000)";
 		}
 		// update channel map with leader and time
@@ -139,7 +158,7 @@ class VoiceManager {
 			.setDescription(partyDescription ?? "")
 			.addFields(
 				{ name: "Leader", value: `<@${leader.id}>`, inline: false },
-				{ name: "Party Type", value: partyType, inline: false },
+				{ name: "Party Type", value: partyType ?? "Casual", inline: false },
 				{
 					name: "Party Size",
 					value: `${currentPartySize}/${maxPartySize}`,
@@ -221,10 +240,13 @@ class VoiceManager {
 				channel?.members?.forEach(async (member) => {
 					if (now > member[1]) {
 						if (member[0].voice?.channel?.id !== channel.channel.id) {
-							await this.removeFromParty(member[0]);
+							await this.removeFromParty(
+								member[0],
+								`You have been removed from your party for inactivity.`
+							);
+						} else {
+							member[1] = refreshed;
 						}
-					} else {
-						member[1] = refreshed;
 					}
 				});
 			});
@@ -237,7 +259,7 @@ class VoiceManager {
 		);
 		if (party) {
 			this.safelyMoveMember(member, party.channel.id);
-			member.send(`You have rejoined a party!`);
+			this.safelySendDm(member, `You have rejoined a party!`);
 		}
 		// if not, do nothing
 	}
@@ -245,17 +267,22 @@ class VoiceManager {
 	clearParty(partyId: Snowflake) {
 		// locate party by id
 		let party = this.parties.find((c) => c.channel.id == partyId);
-		party.leader = null;
-		this.updateListingMessage(party);
 		// call discord to disconnect all members from VC
 		party?.members?.forEach(async (m) => {
-			this.safelyMoveMember(m[0], process.env.VOICE_START_CHANNEL_ID);
+			this.safelyMoveMember(m[0], config.VOICE_START_CHANNEL_ID);
 		});
-		party?.members?.forEach((m) => m[0].send(`Your party has been disbanded.`));
+		party?.members
+			?.filter((m) => m[0].id !== party.leader.id)
+			.forEach((m) =>
+				this.safelySendDm(m[0], `Your party has been disbanded.`)
+			);
 		//also check discord to clear out any dangling members
 		party.channel.members.forEach(async (m) => {
-			this.safelyMoveMember(m, process.env.VOICE_START_CHANNEL_ID);
+			this.safelyMoveMember(m, config.VOICE_START_CHANNEL_ID);
 		});
+
+		party.leader = null;
+		this.updateListingMessage(party);
 		// remove all members from channel
 		party.members = null;
 		// remove leader from channel
@@ -264,8 +291,7 @@ class VoiceManager {
 		party.partyDetails = null;
 	}
 
-	// todo consider adding a "reason" to this function
-	async removeFromParty(member: GuildMember) {
+	async removeFromParty(member: GuildMember, message: string = null) {
 		// locate party by user
 		let party = this.parties
 			.filter((p) => p.members != null)
@@ -276,11 +302,13 @@ class VoiceManager {
 			this.clearParty(party.channel.id);
 		} else {
 			// remove user from channel
-			this.safelyMoveMember(member, process.env.VOICE_START_CHANNEL_ID);
+			this.safelyMoveMember(member, config.VOICE_START_CHANNEL_ID);
 			// remove user from party
 			party.members = party.members?.filter((m) => m[0].id !== member.id);
-			// DM user that they have been removed from party
-			member.send(`You have been removed from the party.`);
+			if (message) {
+				// DM user that they have been removed from party
+				this.safelySendDm(member, message);
+			}
 			this.updateListingMessage(party);
 		}
 	}
@@ -307,6 +335,13 @@ class VoiceManager {
 			} catch (e) {
 				console.log(e);
 			}
+		}
+	}
+	safelySendDm(member: GuildMember, message: string) {
+		try {
+			member.send(message).catch((e) => console.log("unable to send dm"));
+		} catch (e) {
+			console.log("unable to send dm");
 		}
 	}
 }

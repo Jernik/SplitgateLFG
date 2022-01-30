@@ -9,13 +9,25 @@ let leave = {
 		.setDescription("leave or disband your current party"),
 	async execute(interaction: CommandInteraction, voiceManager: VoiceManager) {
 		//get GuildMember object from interaction
+		let member: GuildMember;
 		if (interaction.member instanceof GuildMember) {
-			voiceManager.removeFromParty(interaction.member);
+			member = interaction.member;
+		} else {
+			const found = interaction.guild.members.resolve(
+				this.interaction.user?.id
+			);
+			if (found) member = found;
+		}
+		if (member) {
+			voiceManager.removeFromParty(member);
 			interaction.editReply({
 				content: `you left or disbanded your current party`,
 			});
 		} else {
-			//todo figure out how to get the member object from the APIGuildMember object ig
+			interaction.editReply({
+				content: `Error processing command. (Error 1002)`,
+			});
+			console.log(`unable to locate member object for id ${interaction?.user?.id}`);
 		}
 	},
 };
