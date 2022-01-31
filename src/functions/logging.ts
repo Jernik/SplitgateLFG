@@ -1,11 +1,12 @@
 import { Client, Snowflake } from "discord.js";
-import { GuildConfig } from "../config";
+import { config } from "../config";
 
 let safelyLogToChannel =
-	(client: Client) => (e: unknown, extraInfo: string, config: GuildConfig) => {
+	(client: Client) => (e: unknown, extraInfo: string = null) => {
 		let fullMessage: string;
 		if (e === null) {
-			fullMessage = extraInfo;
+			fullMessage =
+				extraInfo ?? "attempted to log empty message, <@100613274353029120> fix me please";
 		} else {
 			let message: string;
 			if (typeof e === "string") {
@@ -13,15 +14,15 @@ let safelyLogToChannel =
 			} else if (e instanceof Error) {
 				message = e.message; // works, `e` narrowed to Error
 			}
-			fullMessage = extraInfo + " - " + message;
+			fullMessage = message;
 		}
 		console.log(fullMessage);
 		let logChannel = client.channels.cache.get(
-			config.logChannelId as Snowflake
+			config.LOG_CHANNEL_ID as Snowflake
 		);
 		if (logChannel.isText()) {
 			logChannel.send(fullMessage);
 		}
 	};
 
-export { safelyLogToChannel };
+export { safelyLogToChannel as safeLogCreator};

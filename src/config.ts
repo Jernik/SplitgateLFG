@@ -5,6 +5,9 @@ interface ENV {
 	VOICE_START_CHANNEL_ID: string | undefined;
 	LISTING_CHANNEL_ID: string | undefined;
 	CATEGORY_IDS: string | undefined;
+	MODERATOR_ROLE_IDS:string|undefined;
+	COMMAND_CHANNEL_IDS:string|undefined;
+	LOG_CHANNEL_ID:string|undefined;
 }
 
 interface Config {
@@ -14,6 +17,9 @@ interface Config {
 	VOICE_START_CHANNEL_ID: string;
 	LISTING_CHANNEL_ID: string;
 	CATEGORY_IDS: string[];
+	MODERATOR_ROLE_IDS:string[];
+	COMMAND_CHANNEL_IDS:string[];
+	LOG_CHANNEL_ID:string;
 }
 
 const getConfig = (): ENV => {
@@ -24,6 +30,9 @@ const getConfig = (): ENV => {
 		VOICE_START_CHANNEL_ID: process.env.VOICE_START_CHANNEL_ID,
 		LISTING_CHANNEL_ID: process.env.LISTING_CHANNEL_ID,
 		CATEGORY_IDS: process.env.CATEGORY_IDS,
+		MODERATOR_ROLE_IDS:process.env.MODERATOR_ROLE_IDS,
+		COMMAND_CHANNEL_IDS:process.env.COMMAND_CHANNEL_IDS,
+		LOG_CHANNEL_ID:process.env.LOG_CHANNEL_ID,
 	};
 };
 
@@ -35,6 +44,8 @@ const getSanitzedConfig = (config: ENV): Config => {
 	}
 	let parsedConfig = JSON.parse(JSON.stringify(config));
 	parsedConfig.CATEGORY_IDS = JSON.parse(config.CATEGORY_IDS);
+	parsedConfig.MODERATOR_ROLE_IDS = JSON.parse(config.MODERATOR_ROLE_IDS);
+	parsedConfig.COMMAND_CHANNEL_IDS = JSON.parse(config.COMMAND_CHANNEL_IDS);
 	return parsedConfig as Config;
 };
 

@@ -1,16 +1,9 @@
 import { Client, Message } from "discord.js";
+import { config } from "../config";
 import { VoiceManager } from "./VoiceHandler";
 
-//todo move these to config
-const modRoleIds = [
-	//splitgate main
-	"358341736143257602", //moderator
-	"485530182732611585", //admin
-	//test server
-	"936332417768247347", //moderator
-	"936332453075910717", //admin
-];
-const commandChannelIds = ["475299254739402763", "871014690434736128"];
+const modRoleIds = config.MODERATOR_ROLE_IDS;
+const commandChannelIds = config.COMMAND_CHANNEL_IDS;
 
 const prefix = "#";
 
@@ -18,6 +11,10 @@ const prefix = "#";
 // clear party
 let clearParty = async (args: string, voiceManager: VoiceManager) => {
 	let partyId = args.split(" ")[0];
+	// allow moderator to reference channel by mentioning it
+	if (partyId.startsWith("<#") && partyId.endsWith(">")) {
+		partyId = partyId.slice(2, -1);
+	}
 	voiceManager.clearParty(partyId);
 	return `party ${partyId} cleared`;
 };
@@ -26,7 +23,10 @@ let clearParty = async (args: string, voiceManager: VoiceManager) => {
 let kick = async (args: string, voiceManager: VoiceManager, client: Client) => {
 	let memberId = args.split(" ")[0];
 	let guildMember = client.guilds.cache.first().members.cache.get(memberId);
-	await voiceManager.removeFromParty(guildMember, `You have been kicked from your party`);
+	await voiceManager.removeFromParty(
+		guildMember,
+		`You have been kicked from your party`
+	);
 	return `you kicked ${guildMember.user.username} from their party`;
 };
 // clearall parties (reset bot state without restarting bot)

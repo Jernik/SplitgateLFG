@@ -1,7 +1,7 @@
 
 import { Routes } from "discord-api-types/v9";
 import { REST } from "@discordjs/rest";
-import { create } from "./casual";
+import { create } from "./create";
 import { kick } from "./kick";
 import { leave } from "./leave";
 import {config} from "../config";

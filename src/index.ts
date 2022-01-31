@@ -7,7 +7,8 @@ import { MessageHandler } from "./handlers/messageHandler";
 import { commands, registerSlashCommands } from "./commands";
 import { VoiceManager } from "./handlers/VoiceHandler";
 import { buttonHandler } from "./handlers/buttonHandler";
-import {config} from "./config";
+import { config } from "./config";
+import { safeLogCreator } from  "./functions/logging";
 
 let token = config.DISCORD_TOKEN;
 
@@ -21,23 +22,25 @@ const client = new Client({
 	],
 });
 let _voiceManager: VoiceManager;
+let _safeLog = safeLogCreator(client);
 
 // When the client is ready, run this code (only once)
 client.once("ready", () => {
-	console.log("Ready!");
 
 	_voiceManager = new VoiceManager(client);
 	//make sure there is noone in the voice channels
 	_voiceManager.resetAll();
 	//create interval to call into voice manager to check for expired parties/party members
 	setInterval(() => {
-		try{
+		try {
 			console.log("Checking for timeouts");
 			_voiceManager.expireParties();
-		}catch(e){
+		} catch (e) {
 			console.log(e);
 		}
 	}, 5000);
+	
+	_safeLog(`Bot successfully started!`);
 });
 
 client.on("interactionCreate", async (interaction) => {
@@ -62,7 +65,7 @@ client.on("interactionCreate", async (interaction) => {
 		interaction.deferReply({ ephemeral: true }).then(async () => {
 			try {
 				await buttonHandler(interaction, _voiceManager);
-			} catch(e) {
+			} catch (e) {
 				console.log(e);
 				return interaction.editReply({
 					content: "There was an error while executing this command!",

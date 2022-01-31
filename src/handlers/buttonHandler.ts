@@ -24,15 +24,22 @@ async function handleJoinButton(
 	interaction: MessageComponentInteraction,
 	voiceManager: VoiceManager
 ) {
+	let member: GuildMember;
 	if (interaction.member instanceof GuildMember) {
-		let partyId = voiceManager.getPartyId(interaction.member);
+		member = interaction.member;
+	} else {
+		const found = interaction.guild.members.resolve(this.interaction.user?.id);
+		if (found) member = found;
+	}
+	if (member) {
+		let partyId = voiceManager.getPartyId(member);
 		let requestedPartyId = interaction.customId.split("_")[1];
 
 		if (partyId === requestedPartyId) {
 			interaction.editReply(`You're already in that party!`);
 			return;
 		}
-		if (voiceManager.isPartyLeader(interaction.member)) {
+		if (voiceManager.isPartyLeader(member)) {
 			interaction.editReply({
 				content: `You are already the leader of a party, if you wish to join another, you must disband your current party with the /leave command.`,
 			});
@@ -57,12 +64,17 @@ async function handleJoinButton(
 			});
 			return;
 		}
-		if (interaction.member.voice) {
+		if (member.voice) {
 			let requestedPartyId = interaction.customId.split("_")[1];
 			await moveMember(interaction, voiceManager, requestedPartyId);
 		}
 	} else {
-		//todo figure out how to get the member object from the APIGuildMember object and invert this if
+		interaction.editReply({
+			content: `Error processing command. (Error 1002)`,
+		});
+		console.log(
+			`unable to locate member object for id ${interaction?.user?.id}`
+		);
 	}
 	//update party listing with "# members/total members"
 	//interaction.update("a member joined this party");
@@ -71,7 +83,7 @@ async function handleJoinButton(
 
 export { buttonHandler };
 
-    async function handleTransferResponse(
+async function handleTransferResponse(
 	interaction: MessageComponentInteraction,
 	voiceManager: VoiceManager
 ) {
@@ -92,9 +104,16 @@ async function moveMember(
 	voiceManager: VoiceManager,
 	partyId: string
 ) {
+	let member: GuildMember;
 	if (interaction.member instanceof GuildMember) {
-		if (interaction.member.voice?.channelId) {
-			let success = await voiceManager.joinParty(interaction.member, partyId);
+		member = interaction.member;
+	} else {
+		const found = interaction.guild.members.resolve(this.interaction.user?.id);
+		if (found) member = found;
+	}
+	if (member) {
+		if (member.voice?.channelId) {
+			let success = await voiceManager.joinParty(member, partyId);
 			if (success) {
 				interaction.editReply(
 					`You have joined this party! I've automatically moved you to the VC, but if you get disconnected, join <#${config.VOICE_START_CHANNEL_ID}> to be reconnected.`
@@ -108,6 +127,11 @@ async function moveMember(
 			});
 		}
 	} else {
-		//todo figure this out
+		interaction.editReply({
+			content: `Error processing command. (Error 1002)`,
+		});
+		console.log(
+			`unable to locate member object for id ${interaction?.user?.id}`
+		);
 	}
 }

@@ -13,14 +13,17 @@ import {
 	VoiceChannel,
 } from "discord.js";
 import { config } from "../config";
+import { safeLogCreator } from "../functions/logging";
 
 const TIMEOUT_IN_MINUTES = 1;
 class VoiceManager {
 	client: Client<boolean>;
 	parties: Array<Party>;
 	listingChannel: TextChannel;
+	safeLog: (e: any) => void;
 	constructor(client: Client) {
 		this.client = client;
+		this.safeLog = safeLogCreator(client);
 
 		this.listingChannel = this.client.channels.resolve(
 			config.LISTING_CHANNEL_ID
@@ -69,7 +72,7 @@ class VoiceManager {
 
 	resetAll() {
 		this.parties.forEach((p) => {
-			this.clearParty(p.channel.id);
+			this.clearParty(p.channel.id, true);
 		});
 	}
 
@@ -80,6 +83,12 @@ class VoiceManager {
 		maxPartySize: number
 	) {
 		//todo check if leader is already a party leader, handle that case
+		let existingLeaderParty = this.parties.find(
+			(p) => p.leader?.id === leader.id
+		);
+		if (existingLeaderParty) {
+			return `You are already the leader of a party, please disband it and try again.`;
+		}
 		// locate available voice channel
 		let party = this.parties.find((c) => c.leader == null);
 
@@ -119,6 +128,9 @@ class VoiceManager {
 			components: [row],
 		});
 
+		this.safeLog(
+			`${leader} - ${leader.id} has created a party titled "${partyDescription}" in channel ${party.channel} - ${party.channel.id}`
+		);
 		return null;
 	}
 
@@ -196,6 +208,9 @@ class VoiceManager {
 			party.members.push([member, timeout]);
 			// update listing message
 			this.updateListingMessage(party);
+			this.safeLog(
+				`${member} - ${member.id} has joined a party titled "${party.partyDetails.description}" in channel ${party.channel} - ${party.channel.id}`
+			);
 			return true;
 		} else {
 			return;
@@ -264,7 +279,7 @@ class VoiceManager {
 		// if not, do nothing
 	}
 
-	clearParty(partyId: Snowflake) {
+	clearParty(partyId: Snowflake, dmLeader=false) {
 		// locate party by id
 		let party = this.parties.find((c) => c.channel.id == partyId);
 		// call discord to disconnect all members from VC
@@ -280,6 +295,9 @@ class VoiceManager {
 		party.channel.members.forEach(async (m) => {
 			this.safelyMoveMember(m, config.VOICE_START_CHANNEL_ID);
 		});
+
+		if(party.leader)
+			this.safeLog(`Party by leader ${party.leader} - ${party.leader?.id} in channel ${party.channel} has been disbanded.`);
 
 		party.leader = null;
 		this.updateListingMessage(party);
@@ -310,6 +328,7 @@ class VoiceManager {
 				this.safelySendDm(member, message);
 			}
 			this.updateListingMessage(party);
+			this.safeLog(`${member} - ${member.id} has been removed from party.`);
 		}
 	}
 
